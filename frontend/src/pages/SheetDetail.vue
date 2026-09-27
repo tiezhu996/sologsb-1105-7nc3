@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSheetStore, type NewScanItem } from '../stores/sheetStore'
 import { usePlaceStore } from '../stores/placeStore'
+import { useVerificationStore } from '../stores/verificationStore'
 import type { ColorMode, ScanQuality } from '../types/scan'
 import { COLOR_MODES, SCAN_QUALITIES } from '../types/scan'
 import { usePlaceSearch } from '../hooks/usePlaceSearch'
@@ -15,6 +16,7 @@ import VacantHint from '../components/common/VacantHint.vue'
 const route = useRoute()
 const sheetStore = useSheetStore()
 const placeStore = usePlaceStore()
+const verificationStore = useVerificationStore()
 const searchKeyword = ref('')
 const { hits } = usePlaceSearch(searchKeyword)
 const showScanForm = ref(false)
@@ -77,7 +79,7 @@ function exportSheet(): void {
 }
 
 async function initialize(): Promise<void> {
-  await Promise.all([sheetStore.init(), placeStore.init()])
+  await Promise.all([sheetStore.init(), placeStore.init(), verificationStore.init()])
   await sheetStore.loadSheet(sheetId.value)
 }
 
@@ -212,6 +214,7 @@ watch(sheetId, () => {
         :pair="pair"
         :query="searchKeyword"
         :sheet-code="sheet.code"
+        :basis="verificationStore.getLatestBasis(pair.id)"
       />
       <div v-if="searchKeyword && relatedHits.length === 0" class="empty-inline">本地名未检索到吻合记录。</div>
     </div>

@@ -1,7 +1,9 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { Certainty, PlacePair, PlaceType } from '../types/placePair'
+import type { NewVerification } from '../types/verification'
 import { createId, db, plain } from '../utils/db'
+import { useVerificationStore } from './verificationStore'
 
 export type NewPlacePair = Omit<PlacePair, 'id'>
 
@@ -37,10 +39,26 @@ export const usePlaceStore = defineStore('place', () => {
     await initialization
   }
 
-  async function addPair(input: NewPlacePair): Promise<PlacePair> {
+  /**
+   * 新建地名对照。
+   * 若建档即填依据（尤其直接标为「确定」时），在同一事务写入首录核证留痕。
+   */
+  async function addPair(
+    input: NewPlacePair,
+    initialVerification?: Omit<NewVerification, 'placePairId' | 'fromCertainty'>,
+  ): Promise<PlacePair> {
     await init()
     const pair: PlacePair = { ...input, id: createId('place') }
-    await db.placePairs.add(plain(pair))
+    const verificationStore = useVerificationStore()
+    await db.transaction('rw', db.placePairs, db.verifications, async () => {
+      await db.placePairs.add(plain(pair))
+      if (initialVerification) {
+        await verificationStore.attachInitialRecord({
+          ...initialVerification,
+          placePairId: pair.id,
+        })
+      }
+    })
     pairs.value = [...pairs.value, pair]
     currentPair.value = pair
     return pair
@@ -57,6 +75,14 @@ export const usePlaceStore = defineStore('place', () => {
 
   function setMatchedPairIds(ids: string[]): void {
     matchedPairIds.value = [...ids]
+  }
+
+  /** 核证保存后同步内存中的当前档位（数据库更新由核证流程在同一事务完成）。 */
+  function updateCertainty(id: string, certainty: Certainty): void {
+    pairs.value = pairs.value.map((pair) => (pair.id === id ? { ...pair, certainty } : pair))
+    if (currentPair.value?.id === id) {
+      currentPair.value = { ...currentPair.value, certainty }
+    }
   }
 
   function resetFilters(): void {
@@ -80,6 +106,7 @@ export const usePlaceStore = defineStore('place', () => {
     loadPair,
     getPairsForSheet,
     setMatchedPairIds,
+    updateCertainty,
     resetFilters,
   }
 })

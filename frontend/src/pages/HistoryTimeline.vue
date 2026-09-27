@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHistoryStore, type NewNameHistory } from '../stores/historyStore'
 import { usePlaceStore } from '../stores/placeStore'
+import { useVerificationStore } from '../stores/verificationStore'
 import { useSheetStore } from '../stores/sheetStore'
 import type { NameChangeType } from '../types/history'
 import { NAME_CHANGE_TYPES } from '../types/history'
@@ -12,6 +13,7 @@ import VacantHint from '../components/common/VacantHint.vue'
 const route = useRoute()
 const placeStore = usePlaceStore()
 const historyStore = useHistoryStore()
+const verificationStore = useVerificationStore()
 const sheetStore = useSheetStore()
 const formError = ref('')
 
@@ -69,9 +71,10 @@ async function submitHistory(): Promise<void> {
 }
 
 async function initialize(): Promise<void> {
-  await Promise.all([sheetStore.init(), placeStore.init(), historyStore.init()])
+  await Promise.all([sheetStore.init(), placeStore.init(), historyStore.init(), verificationStore.init()])
   await placeStore.loadPair(placePairId.value)
   await historyStore.loadFor(placePairId.value)
+  await verificationStore.loadFor(placePairId.value)
 }
 
 onMounted(() => {
@@ -82,6 +85,7 @@ watch(placePairId, () => {
   Object.assign(form, createEmptyForm())
   void placeStore.loadPair(placePairId.value)
   void historyStore.loadFor(placePairId.value)
+  void verificationStore.loadFor(placePairId.value)
 })
 </script>
 
@@ -98,7 +102,16 @@ watch(placePairId, () => {
 
     <div class="detail-layout">
       <div>
-        <PairRow :pair="pair" :sheet-code="sheet?.code ?? '图幅待补'" />
+        <PairRow
+          :pair="pair"
+          :sheet-code="sheet?.code ?? '图幅待补'"
+          :basis="verificationStore.getLatestBasis(pair.id)"
+        />
+        <p class="verification-link">
+          <router-link :to="`/places/${pair.id}/verification`">
+            <el-button link type="primary">查看并补录核证留痕（{{ verificationStore.getForPair(pair.id).length }} 条经过）</el-button>
+          </router-link>
+        </p>
 
         <div class="section-title">
           <h2>沿革序列</h2>
@@ -158,3 +171,10 @@ watch(placePairId, () => {
     <VacantHint title="未找到地名对照" description="请返回地名对照台选择有效记录。" />
   </section>
 </template>
+
+<style scoped>
+.verification-link {
+  margin: 8px 0 0;
+  text-align: right;
+}
+</style>

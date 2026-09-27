@@ -3,6 +3,7 @@ const navigation = [
   { label: '图幅编目台', to: '/sheets', hint: '编目与筛选' },
   { label: '地名对照台', to: '/places', hint: '古今与异写' },
   { label: '沿革时间线', to: '/places/place-bp-yi-3-1/history', hint: '年代脉络' },
+  { label: '核证留痕', to: '/places/place-bp-bing-5-2/verification', hint: '依据与档位' },
   { label: '邻接拼合预览', to: '/sheets/sheet-bp-yi-3/neighbors', hint: '四至关系' },
 ]
 </script>

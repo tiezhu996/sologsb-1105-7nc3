@@ -3,6 +3,7 @@ import type { NameHistory } from '../types/history'
 import type { PlacePair } from '../types/placePair'
 import type { ScanItem } from '../types/scan'
 import type { Sheet } from '../types/sheet'
+import type { Verification } from '../types/verification'
 
 const sheets: Sheet[] = [
   {
@@ -376,11 +377,38 @@ const histories: NameHistory[] = [
   { id: 'hist-24', placePairId: 'place-kf-chengxi-1-2', period: '北宋天圣年间', name: '州桥', changeType: '改名', sourceRef: '《东京梦华录》卷二', note: '御街跨桥通称州桥，天汉桥为正式桥名。' },
 ]
 
+// 核证留痕：仅给两条补核过的对照留档，其余旧对照暂无记录，档位照旧沿用。
+const verifications: Verification[] = [
+  {
+    id: 'verif-01',
+    placePairId: 'place-bp-bing-5-2',
+    fromCertainty: '待考',
+    toCertainty: '存疑',
+    sourceRef: '《日下旧闻考》卷九十五',
+    reason: '',
+    verifier: '周绍明',
+    verifiedAt: '2025-06-02T10:15:00.000Z',
+    note: '金代钓鱼台见于记载，与今玉渊潭水系方位相合，但名称沿革尚缺直接过渡证据，先由待考前推为存疑。',
+  },
+  {
+    id: 'verif-02',
+    placePairId: 'place-tj-dong-2-1',
+    fromCertainty: '待考',
+    toCertainty: '存疑',
+    sourceRef: '《天津县新志》卷八',
+    reason: '',
+    verifier: '林佩玖',
+    verifiedAt: '2025-06-11T14:40:00.000Z',
+    note: '同治志载马家口义渡位置，与图上渡口吻合；惟今大光明桥系 1985 年另建，对应关系仍需比对桥梁档案。',
+  },
+]
+
 class GboldmapDatabase extends Dexie {
   sheets!: Table<Sheet, string>
   scans!: Table<ScanItem, string>
   placePairs!: Table<PlacePair, string>
   histories!: Table<NameHistory, string>
+  verifications!: Table<Verification, string>
 
   constructor() {
     super('gboldmap-db')
@@ -408,11 +436,21 @@ class GboldmapDatabase extends Dexie {
           })
       })
 
+    // version(3)：新增核证留痕仓库。旧对照没有核证记录时，档位仍取 placePairs.certainty。
+    this.version(3).stores({
+      sheets: 'id, code, year, scale, status, series',
+      scans: 'id, sheetId, importedAt, quality',
+      placePairs: 'id, sheetId, oldName, newName, placeType, certainty',
+      histories: 'id, placePairId, period, changeType',
+      verifications: 'id, placePairId, verifiedAt, toCertainty',
+    })
+
     this.on('populate', async () => {
       await this.sheets.bulkAdd(sheets)
       await this.scans.bulkAdd(scans)
       await this.placePairs.bulkAdd(placePairs)
       await this.histories.bulkAdd(histories)
+      await this.verifications.bulkAdd(verifications)
     })
   }
 }

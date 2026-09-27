@@ -7,10 +7,12 @@ const props = withDefaults(
     pair: PlacePair
     query?: string
     sheetCode?: string
+    basis?: string
   }>(),
   {
     query: '',
     sheetCode: '',
+    basis: '',
   },
 )
 
@@ -70,6 +72,9 @@ function highlight(text: string) {
           </template>
         </span><span v-if="aliasIndex < pair.aliasList.length - 1">、</span>
       </template>
+    </p>
+    <p v-if="basis" class="pair-row__basis">
+      <span class="pair-row__label">最近依据</span>{{ basis }}
     </p>
   </article>
 </template>
