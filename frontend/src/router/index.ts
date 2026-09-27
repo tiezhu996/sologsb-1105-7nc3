@@ -3,6 +3,7 @@ import SheetList from '../pages/SheetList.vue'
 import SheetDetail from '../pages/SheetDetail.vue'
 import PlaceBoard from '../pages/PlaceBoard.vue'
 import HistoryTimeline from '../pages/HistoryTimeline.vue'
+import VerificationTrace from '../pages/VerificationTrace.vue'
 import NeighborView from '../pages/NeighborView.vue'
 
 const routes: RouteRecordRaw[] = [
@@ -11,6 +12,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/sheets/:id', name: 'sheet-detail', component: SheetDetail },
   { path: '/places', name: 'places', component: PlaceBoard },
   { path: '/places/:id/history', name: 'place-history', component: HistoryTimeline },
+  { path: '/places/:id/verification', name: 'place-verification', component: VerificationTrace },
   { path: '/sheets/:id/neighbors', name: 'sheet-neighbors', component: NeighborView },
   { path: '/:pathMatch(.*)*', redirect: '/sheets' },
 ]

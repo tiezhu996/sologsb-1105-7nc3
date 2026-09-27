@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import type { Certainty, PlacePair } from '../../types/placePair'
+import type { VerificationRecord } from '../../types/verification'
 import { splitHighlight } from '../../hooks/usePlaceSearch'
+import { formatDateTime } from '../../utils/export'
 
 const props = withDefaults(
   defineProps<{
     pair: PlacePair
     query?: string
     sheetCode?: string
+    latestVerification?: VerificationRecord | null
+    showVerification?: boolean
   }>(),
   {
     query: '',
     sheetCode: '',
+    latestVerification: null,
+    showVerification: false,
   },
 )
 
@@ -53,6 +59,17 @@ function highlight(text: string) {
       <el-tag :type="certaintyType[pair.certainty]">{{ pair.certainty }}</el-tag>
       <el-tag v-if="sheetCode" type="info" effect="plain">{{ sheetCode }}</el-tag>
     </div>
+    <p v-if="showVerification" class="pair-row__verify" data-testid="latest-verification">
+      <template v-if="latestVerification">
+        <span class="pair-row__verify-label">最近依据</span>
+        {{ latestVerification.sourceRef || '（未填出处）' }}
+        <em>· {{ latestVerification.verifier }} 核 · {{ formatDateTime(latestVerification.changedAt) }}</em>
+      </template>
+      <template v-else>
+        <span class="pair-row__verify-label">核证留痕</span>
+        <em>早先录入，尚无核证依据，档位「{{ pair.certainty }}」照旧</em>
+      </template>
+    </p>
     <p class="pair-row__coord">
       <span class="pair-row__label">图上方位</span>
       <template v-for="(part, index) in highlight(pair.coordNote)" :key="`coord-${index}`">

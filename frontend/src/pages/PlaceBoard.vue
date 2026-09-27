@@ -2,20 +2,30 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { usePlaceStore, type NewPlacePair } from '../stores/placeStore'
 import { useSheetStore } from '../stores/sheetStore'
-import type { Certainty, PlacePair, PlaceType } from '../types/placePair'
+import { useVerificationStore } from '../stores/verificationStore'
+import type { PlacePair } from '../types/placePair'
 import { CERTAINTIES, PLACE_TYPES } from '../types/placePair'
+import type { VerificationIssue } from '../types/verification'
+import { validateVerification } from '../types/verification'
 import { usePlaceSearch } from '../hooks/usePlaceSearch'
+import { downloadJson } from '../utils/export'
 import PairRow from '../components/common/PairRow.vue'
 import VacantHint from '../components/common/VacantHint.vue'
 
 const placeStore = usePlaceStore()
 const sheetStore = useSheetStore()
+const verificationStore = useVerificationStore()
 const { matches } = usePlaceSearch(placeStore.keyword)
 
 const showCreateForm = ref(false)
 const formError = ref('')
 
-function createEmptyForm(): NewPlacePair {
+interface PlaceFormState extends NewPlacePair {
+  verifier: string
+  sourceRef: string
+}
+
+function createEmptyForm(): PlaceFormState {
   return {
     sheetId: sheetStore.sheets[0]?.id ?? '',
     oldName: '',
@@ -24,10 +34,12 @@ function createEmptyForm(): NewPlacePair {
     placeType: '村镇',
     coordNote: '',
     certainty: '确定',
+    verifier: '',
+    sourceRef: '',
   }
 }
 
-const form = reactive<NewPlacePair>(createEmptyForm())
+const form = reactive<PlaceFormState>(createEmptyForm())
 const aliasInput = ref('')
 
 const visiblePairs = computed(() =>
@@ -37,10 +49,30 @@ const visiblePairs = computed(() =>
   }),
 )
 
+const latestVerificationMap = computed(() => verificationStore.getLatestMap())
+
 function getSheetCode(pair: PlacePair): string {
   return sheetStore.getSheetById(pair.sheetId)?.code ?? '图幅待补'
 }
 
+function fieldIssues(issues: VerificationIssue[], field: VerificationIssue['field']): VerificationIssue[] {
+  return issues.filter((issue) => issue.field === field)
+}
+
+const formIssues = computed<VerificationIssue[]>(() =>
+  validateVerification(
+    {
+      toCertainty: form.certainty,
+      verifier: form.verifier,
+      sourceRef: form.sourceRef,
+      reason: '',
+    },
+    null,
+  ),
+)
+
+const verifierIssue = computed(() => fieldIssues(formIssues.value, 'verifier')[0]?.message ?? '')
+const sourceIssue = computed(() => fieldIssues(formIssues.value, 'sourceRef')[0]?.message ?? '')
 function resetForm(): void {
   Object.assign(form, createEmptyForm())
   aliasInput.value = ''
@@ -52,22 +84,80 @@ async function submitPlace(): Promise<void> {
     formError.value = '请选择所属图幅，并填写古名与今名。'
     return
   }
-  await placeStore.addPair({
-    ...form,
-    oldName: form.oldName.trim(),
-    newName: form.newName.trim(),
-    coordNote: form.coordNote.trim() || '图上方位待核',
-    aliasList: aliasInput.value
-      .split(/[、，,]/)
-      .map((alias) => alias.trim())
-      .filter(Boolean),
-  })
+
+  const issues = formIssues.value
+  if (issues.length) {
+    formError.value = issues.map((issue) => issue.message).join('；')
+    return
+  }
+
+  const hasVerification = form.verifier.trim() || form.sourceRef.trim()
+  const { verification } = await placeStore.addPair(
+    {
+      sheetId: form.sheetId,
+      oldName: form.oldName.trim(),
+      newName: form.newName.trim(),
+      aliasList: aliasInput.value
+        .split(/[、，,]/)
+        .map((alias) => alias.trim())
+        .filter(Boolean),
+      placeType: form.placeType,
+      coordNote: form.coordNote.trim() || '图上方位待核',
+      certainty: form.certainty,
+    },
+    hasVerification
+      ? {
+          toCertainty: form.certainty,
+          verifier: form.verifier.trim(),
+          sourceRef: form.sourceRef.trim(),
+          reason: '',
+          changedAt: new Date().toISOString(),
+        }
+      : undefined,
+  )
+  if (verification) {
+    verificationStore.attachInitial(verification)
+  }
   resetForm()
   showCreateForm.value = false
 }
 
+function exportVerifications(): void {
+  const exportedAt = new Date().toISOString()
+  const entries = placeStore.pairs.map((pair) => {
+    const sheet = sheetStore.getSheetById(pair.sheetId)
+    const records = verificationStore.getForPair(pair.id)
+    const latest = records.length ? records[records.length - 1] : undefined
+    return {
+      placePairId: pair.id,
+      sheetCode: sheet?.code ?? '图幅待补',
+      oldName: pair.oldName,
+      newName: pair.newName,
+      currentCertainty: pair.certainty,
+      latestBasis: latest
+        ? {
+            sourceRef: latest.sourceRef,
+            verifier: latest.verifier,
+            changedAt: latest.changedAt,
+          }
+        : null,
+      legacyWithoutEvidence: records.length === 0,
+      verificationTrail: records,
+    }
+  })
+  downloadJson('地名核证全档.json', {
+    exportedAt,
+    summary: {
+      totalPairs: entries.length,
+      verifiedPairs: entries.filter((entry) => entry.verificationTrail.length > 0).length,
+      legacyPairsWithoutEvidence: entries.filter((entry) => entry.legacyWithoutEvidence).length,
+    },
+    entries,
+  })
+}
+
 async function initialize(): Promise<void> {
-  await Promise.all([sheetStore.init(), placeStore.init()])
+  await Promise.all([sheetStore.init(), placeStore.init(), verificationStore.init()])
   if (!form.sheetId) {
     form.sheetId = sheetStore.sheets[0]?.id ?? ''
   }
@@ -86,9 +176,14 @@ onMounted(() => {
         <h1>地名对照台</h1>
         <p>并置古地图旧名与现代地名，收录异写异读、图上方位和核证程度，供地名反向查询与交叉复核。</p>
       </div>
-      <el-button type="primary" size="large" data-testid="new-place" @click="showCreateForm = true">
-        新建地名对照
-      </el-button>
+      <div class="heading-actions">
+        <el-button size="large" data-testid="export-verifications" @click="exportVerifications">
+          导出核证全档
+        </el-button>
+        <el-button type="primary" size="large" data-testid="new-place" @click="showCreateForm = true">
+          新建地名对照
+        </el-button>
+      </div>
     </div>
 
     <form v-if="showCreateForm" class="inline-form" data-testid="form-place" @submit.prevent="submitPlace">
@@ -120,15 +215,36 @@ onMounted(() => {
         <el-form-item label="异写异读">
           <input v-model="aliasInput" class="native-field" data-testid="field-aliasList" placeholder="多个异写用逗号分隔" />
         </el-form-item>
+        <el-form-item :label="form.certainty === '确定' ? '核证人（必填）' : '核证人'" :required="form.certainty === '确定'">
+          <input v-model="form.verifier" class="native-field" data-testid="field-verifier" placeholder="谁核的" />
+        </el-form-item>
+        <el-form-item
+          :label="form.certainty === '确定' ? '依据出处（必填）' : '依据出处'"
+          :required="form.certainty === '确定'"
+          class="form-grid__wide"
+        >
+          <input
+            v-model="form.sourceRef"
+            class="native-field"
+            data-testid="field-sourceRef"
+            placeholder="依据哪本书，注明志书、档案或卷页"
+          />
+        </el-form-item>
         <el-form-item label="图上方位" required class="form-grid__wide">
           <textarea v-model="form.coordNote" class="native-field" data-testid="field-coordNote" rows="3"></textarea>
         </el-form-item>
+        <p v-if="form.certainty === '确定' && (verifierIssue || sourceIssue)" class="field-hint text-danger form-grid__wide">
+          {{ verifierIssue }}{{ verifierIssue && sourceIssue ? '；' : '' }}{{ sourceIssue }}
+        </p>
+        <p v-else class="field-hint muted form-grid__wide">
+          定为「确定」须同时填写核证人与依据出处；存疑、待考可先建档后补核。早先录入的对照不受此限。
+        </p>
         <div class="form-actions">
           <el-button @click="showCreateForm = false; resetForm()">取消</el-button>
           <el-button type="primary" native-type="submit" data-testid="submit-place">保存对照</el-button>
         </div>
       </div>
-      <p v-if="formError" class="text-danger">{{ formError }}</p>
+      <p v-if="formError" class="text-danger" data-testid="place-form-error">{{ formError }}</p>
     </form>
 
     <div class="filter-bar">
@@ -146,8 +262,17 @@ onMounted(() => {
 
     <div v-if="visiblePairs.length" class="place-list">
       <div v-for="pair in visiblePairs" :key="pair.id" data-testid="row-place">
-        <PairRow :pair="pair" :query="placeStore.keyword" :sheet-code="getSheetCode(pair)" />
+        <PairRow
+          :pair="pair"
+          :query="placeStore.keyword"
+          :sheet-code="getSheetCode(pair)"
+          :latest-verification="latestVerificationMap.get(pair.id)"
+          show-verification
+        />
         <div class="pair-row-actions">
+          <router-link :to="`/places/${pair.id}/verification`">
+            <el-button link type="primary" data-testid="open-verification">核证留痕</el-button>
+          </router-link>
           <router-link :to="`/places/${pair.id}/history`">
             <el-button link type="primary">展开沿革时间线</el-button>
           </router-link>
@@ -170,9 +295,21 @@ onMounted(() => {
   grid-column: span 2;
 }
 
+.heading-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.field-hint {
+  margin: -4px 0 10px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .pair-row-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 14px;
   padding: 5px 12px 0;
 }
 

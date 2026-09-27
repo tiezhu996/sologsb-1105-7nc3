@@ -701,6 +701,30 @@ textarea.native-field {
   line-height: 1.7;
 }
 
+.pair-row__verify {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  color: #5d4a3c;
+  background: #f0e7d8;
+  border-left: 3px solid #a68055;
+  border-radius: 4px;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.pair-row__verify em {
+  color: var(--muted);
+  font-style: normal;
+}
+
+.pair-row__verify-label {
+  margin-right: 6px;
+  color: var(--accent-dark);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
 mark {
   padding: 1px 2px;
   color: #58291f;

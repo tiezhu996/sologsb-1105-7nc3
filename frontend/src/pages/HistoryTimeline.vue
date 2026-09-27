@@ -93,7 +93,10 @@ watch(placePairId, () => {
         <h1>{{ pair.oldName }} 地名沿革时间线</h1>
         <p>沿时间顺序整理更名、迁治与废置记录，保留出处卷页，形成可复核的地名脉络。</p>
       </div>
-      <router-link to="/places"><el-button>返回地名对照台</el-button></router-link>
+      <div>
+        <router-link :to="`/places/${pair.id}/verification`"><el-button plain>核证留痕</el-button></router-link>
+        <router-link to="/places"><el-button>返回地名对照台</el-button></router-link>
+      </div>
     </div>
 
     <div class="detail-layout">

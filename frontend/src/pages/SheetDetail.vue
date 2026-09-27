@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSheetStore, type NewScanItem } from '../stores/sheetStore'
 import { usePlaceStore } from '../stores/placeStore'
+import { useVerificationStore } from '../stores/verificationStore'
 import type { ColorMode, ScanQuality } from '../types/scan'
 import { COLOR_MODES, SCAN_QUALITIES } from '../types/scan'
 import { usePlaceSearch } from '../hooks/usePlaceSearch'
@@ -15,6 +16,7 @@ import VacantHint from '../components/common/VacantHint.vue'
 const route = useRoute()
 const sheetStore = useSheetStore()
 const placeStore = usePlaceStore()
+const verificationStore = useVerificationStore()
 const searchKeyword = ref('')
 const { hits } = usePlaceSearch(searchKeyword)
 const showScanForm = ref(false)
@@ -73,11 +75,12 @@ function exportSheet(): void {
     sheet: sheet.value,
     scans: sheetStore.getScansForSheet(sheet.value.id),
     placePairs: relatedPlaces.value,
+    verifications: relatedPlaces.value.flatMap((pair) => verificationStore.getForPair(pair.id)),
   })
 }
 
 async function initialize(): Promise<void> {
-  await Promise.all([sheetStore.init(), placeStore.init()])
+  await Promise.all([sheetStore.init(), placeStore.init(), verificationStore.init()])
   await sheetStore.loadSheet(sheetId.value)
 }
 

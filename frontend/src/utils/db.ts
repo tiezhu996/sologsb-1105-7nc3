@@ -3,6 +3,7 @@ import type { NameHistory } from '../types/history'
 import type { PlacePair } from '../types/placePair'
 import type { ScanItem } from '../types/scan'
 import type { Sheet } from '../types/sheet'
+import type { VerificationRecord } from '../types/verification'
 
 const sheets: Sheet[] = [
   {
@@ -381,6 +382,7 @@ class GboldmapDatabase extends Dexie {
   scans!: Table<ScanItem, string>
   placePairs!: Table<PlacePair, string>
   histories!: Table<NameHistory, string>
+  verifications!: Table<VerificationRecord, string>
 
   constructor() {
     super('gboldmap-db')
@@ -407,6 +409,16 @@ class GboldmapDatabase extends Dexie {
             sheet.schemaRev = 2
           })
       })
+
+    // version(3)：新增核证留痕仓库。早先录入的地名对照不补造核证记录，
+    // 其确定度档位照旧保留；之后每次核证按条写入 verifications。
+    this.version(3).stores({
+      sheets: 'id, code, year, scale, status, series',
+      scans: 'id, sheetId, importedAt, quality',
+      placePairs: 'id, sheetId, oldName, newName, placeType, certainty',
+      histories: 'id, placePairId, period, changeType',
+      verifications: 'id, placePairId, changedAt, toCertainty',
+    })
 
     this.on('populate', async () => {
       await this.sheets.bulkAdd(sheets)
